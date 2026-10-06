@@ -460,7 +460,11 @@ function showStart(kind,o={}){
   const p=t=>h('p',{text:t});
   const acts=(...b)=>h('div',{class:'acts'},...b);
   if(kind==='unsupported')card.append(title,p('이 브라우저는 작업 폴더 저장 기능을 지원하지 않습니다.'),p('갤럭시 탭의 Chrome(최신 버전)으로 열어 주세요. 삼성 인터넷은 지원하지 않습니다.'));
-  else if(kind==='first')card.append(title,p('작업 폴더를 지정하세요.'),p(`주차별 엑셀 파일을 이 폴더에서 읽고 저장합니다. 이번 주 파일 이름: ${Store.folder.fileName(weekInfo(thisWS()).Y,weekInfo(thisWS()).n)} (주차 번호는 매주 바뀝니다)`),acts(h('button',{class:'primary',text:'폴더 선택',onclick:pickFolder})));
+  else if(kind==='first')card.append(title,p('작업 폴더를 지정하세요.'),
+    p(`주차별 엑셀 파일을 작업 폴더에서 읽고 저장합니다. 이번 주 파일 이름: ${Store.folder.fileName(weekInfo(thisWS()).Y,weekInfo(thisWS()).n)} (주차 번호는 매주 바뀝니다)`),
+    p(`· 폴더 선택: 이미 쓰고 있는 작업 폴더를 엽니다.`),
+    p(`· 신규 생성: 만들 위치(예: Documents)를 고르면 그 안에 '${NEW_DIR}' 폴더와 이번 주 빈 파일을 만듭니다.`),
+    acts(h('button',{class:'primary',text:'폴더 선택',onclick:pickFolder}),h('button',{class:'primary',text:'신규 생성',onclick:createNew})));
   else if(kind==='resume')card.append(title,p('작업 폴더: '+o.dir.name),p('폴더 접근을 확인하려면 [계속]을 누르세요.'),acts(h('button',{class:'primary',text:'계속',onclick:()=>resumeFolder(o.dir)}),h('button',{text:'다른 폴더 선택',onclick:pickFolder})));
   else if(kind==='loading')card.append(title,p('작업 폴더를 읽는 중…'));
   else if(kind==='error')card.append(title,p(o.msg),acts(h('button',{class:'primary',text:'폴더 다시 선택',onclick:pickFolder})));
@@ -479,6 +483,22 @@ function showStart(kind,o={}){
   }
 }
 const hideStart=()=>{$('#start').hidden=true};
+// 신규 생성: 고른 위치 안에 작업 폴더를 만들고, 이번 주 빈 파일을 만든 뒤 연다
+const NEW_DIR='업무일정';
+async function createNew(){
+  let parent,dir,files=[];
+  try{parent=await Store.folder.pick()}catch(e){if(e&&e.name==='AbortError')return;toast('위치를 열지 못했습니다: '+((e&&e.message)||e));return}
+  try{dir=await parent.getDirectoryHandle(NEW_DIR,{create:true})}catch(e){toast('새 폴더를 만들지 못했습니다: '+((e&&e.message)||e));return}
+  try{files=await Store.folder.list(dir)}catch(e){}
+  if(files.length)toast(`'${NEW_DIR}' 폴더가 이미 있어서 그 폴더를 엽니다.`);
+  else{
+    const ws=thisWS(),{Y,n}=weekInfo(ws);
+    try{await Store.folder.write(dir,Store.folder.fileName(Y,n),XL.build([dataToSheet({projects:[],items:[]},ws)]))}
+    catch(e){toast('파일을 만들지 못했습니다: '+((e&&e.message)||e));return}
+  }
+  await Store.kv.set('dir',dir);
+  openFolder(dir);
+}
 async function pickFolder(){
   let dir;
   try{dir=await Store.folder.pick()}catch(e){if(e&&e.name==='AbortError')return;toast('폴더를 열지 못했습니다: '+((e&&e.message)||e));return}

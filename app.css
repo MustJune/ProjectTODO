@@ -208,4 +208,5 @@ button:disabled{opacity:.45;cursor:default}
 .start-card p{margin:0;color:var(--muted);line-height:1.55}
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .acts button{min-height:42px}
+.acts button:last-child:not(:first-child){margin-left:auto}
 
