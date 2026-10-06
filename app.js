@@ -185,9 +185,14 @@ function renderStatus(force){
   else if(DIRTY)st.append(h('span',{class:'dirty',text:'● 저장 안 된 변경 있음'}));
   else if(LAST_SAVE)st.append('저장됨 '+hm(LAST_SAVE));
   else if(LOADED)st.append('불러옴');
-  const file=LOADED?LOADED.name:'파일 없음 (저장하면 '+Store.folder.fileName(weekInfo(targetWS()).Y,weekInfo(targetWS()).n)+')';
-  el.append(h('span',{class:'fdir',text:'폴더: '+DIR.name}),' · ',h('span',{class:'ffile',text:file}),' · ',st);
+  el.append(st);   // 메인에는 저장 상태만. 폴더·파일 이름은 설정 > 작업 폴더에 표시
   const b=$('#b-save');b.classList.toggle('primary',DIRTY||SAVE_ERR);
+}
+// 현재 파일 이름 (아직 파일이 없으면 저장될 이름)
+function curFileLabel(){
+  if(LOADED&&LOADED.ws>=thisWS())return LOADED.name;
+  const w=weekInfo(targetWS()),next=Store.folder.fileName(w.Y,w.n);
+  return LOADED?`${LOADED.name} (수정하면 ${next}로 저장)`:`없음 (저장하면 ${next})`;
 }
 function renderBanners(){
   const box=$('#banners');box.textContent='';
@@ -303,11 +308,15 @@ function toggleFold(pid){S.fold[pid]=!S.fold[pid];persist();render()}
 
 /* ---------- 간트 (가로: 연간 / 세로: 금주부터 3주) ---------- */
 const PORT_WEEKS=3;
+const LAND_W=43.2;   // 가로 보기 주차 칸 너비(px). 기존 36의 1.2배
 function renderGantt(root,port){
   const NW=port?136:200;
   const vs=port?thisWS():viewStart();
-  const nW=port?PORT_WEEKS:Math.max(1,Math.ceil((DEC31-vs+1)/7));
-  const W=port?Math.max(63,Math.floor((root.clientWidth-NW-1)/nW/7)*7):36, DW=W/7, tw=nW*W, ve=vs+nW*7-1;
+  // 가로: 끝은 다음 해 3월 말까지. 시작은 [이전 보기] 켜면 올해 1월, 끄면 금주. 화면이 더 넓으면 오른쪽 끝까지 주차를 채움
+  const landEnd=dn(`${YEAR+1}-03-31`);
+  const fillW=Math.ceil((root.clientWidth-NW)/LAND_W)+1;
+  const nW=port?PORT_WEEKS:Math.max(Math.ceil((landEnd-vs+1)/7),fillW);
+  const W=port?Math.max(63,Math.floor((root.clientWidth-NW-1)/nW/7)*7):LAND_W, DW=W/7, tw=nW*W, ve=vs+nW*7-1;
   const x=n=>(n-vs)*DW;
   const seg=(a,b)=>{const s=Math.max(a,vs),e=Math.min(b,ve);return e<s?null:{left:x(s)+'px',width:(e-s+1)*DW+'px'}};
   const win=port?[vs,ve]:null;
@@ -315,9 +324,12 @@ function renderGantt(root,port){
   sc.style.setProperty('--NW',NW+'px');sc.style.setProperty('--W',W+'px');sc.style.setProperty('--DW',DW+'px');
   const inner=h('div',{class:'g-inner',style:{width:`calc(var(--NW) + ${tw}px)`}});
   const ht=h('div',{class:'g-ht',style:{width:tw+'px'}});
-  for(let m=0;m<13;m++){
-    const a=Math.round(Date.UTC(YEAR,m,1)/DAY),b=Math.round(Date.UTC(YEAR,m+1,1)/DAY)-1;
-    const s=seg(a,b);if(s)ht.append(h('div',{class:'g-month',style:s,text:(m%12+1)+'월'}));
+  // 월 표시: 표시 구간에 걸친 모든 달 (해가 바뀌는 1월은 연도 함께 표시)
+  for(let y=new Date(vs*DAY).getUTCFullYear(),m=new Date(vs*DAY).getUTCMonth();;m++){
+    if(m>11){m=0;y++}
+    const a=Math.round(Date.UTC(y,m,1)/DAY);if(a>ve)break;
+    const b=Math.round(Date.UTC(y,m+1,1)/DAY)-1;
+    const s=seg(a,b);if(s)ht.append(h('div',{class:'g-month',style:s,text:(m===0&&y!==YEAR?y+'.':'')+(m+1)+'월'}));
   }
   const tws=thisWS(), DN=['일','월','화','수','목','금','토'];
   for(let i=0;i<nW;i++){const ws=vs+7*i;
@@ -437,11 +449,14 @@ function setModal(){
     const seg=(opts,cur,fn)=>h('div',{class:'seg'},opts.map(([v,l])=>h('button',{class:cur===v?'on':null,text:l,onclick:()=>{fn(v);needScroll=true;persist();render();modalRender()}})));
     const body=[
       h('div',{class:'sec'},h('div',{class:'grp',text:'작업 폴더'}),
-        h('div',{class:'prow'},h('span',{class:'fname',text:DIR?DIR.name:'-'}),h('button',{text:'변경',class:'wide',onclick:changeFolder})),
-        h('div',{class:'note',text:'브라우저 보안 정책상 폴더 이름만 표시됩니다.'})),
+        h('div',{class:'prow'},h('div',{class:'finfo'},
+            h('div',{},h('span',{class:'flbl',text:'폴더'}),h('span',{class:'fname',text:DIR?DIR.name:'-'})),
+            h('div',{},h('span',{class:'flbl',text:'파일'}),h('span',{class:'fname',text:curFileLabel()}))),
+          h('button',{text:'변경',class:'wide',onclick:changeFolder})),
+        h('div',{class:'note',text:'브라우저 보안 정책상 폴더는 이름만 표시됩니다.'})),
       h('div',{class:'sec'},h('div',{class:'grp',text:'화면 방향'}),
         h('div',{},seg([['auto','자동'],['land','가로'],['port','세로']],S.orient,v=>S.orient=v)),
-        h('div',{class:'note',text:'자동: 기기를 가로로 들면 1년 간트, 세로로 들면 금주부터 3주 간트를 보여줍니다.'})),
+        h('div',{class:'note',text:'자동: 기기를 가로로 들면 다음 해 3월까지의 간트, 세로로 들면 금주부터 3주 간트를 보여줍니다.'})),
       h('div',{class:'sec last'},h('div',{class:'grp',text:'앱 정보'}),
         h('div',{class:'note','data-ver':'1',text:`버전 ${SW_VERSION||'확인 중'} · 주 시작 요일: 일요일`}))];
     return{body};

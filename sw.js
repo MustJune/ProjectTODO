@@ -4,7 +4,7 @@
  *  - 새 버전이 올라오면 내려받아 "대기"만 한다. 앱 화면의 [업데이트]를 눌러야 교체된다.
  *  - 코드를 수정해 올릴 때는 반드시 아래 VERSION 값을 올린다. (이 파일이 바뀌어야 브라우저가 새 버전을 감지함)
  */
-const VERSION='1.0.1';
+const VERSION='1.0.4';
 const CACHE='work-schedule-'+VERSION;
 const FILES=['./','./index.html','./app.css','./app.js','./xlsx.js','./store.js','./manifest.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png'];
