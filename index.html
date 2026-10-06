@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 외부 전송 차단(CSP): 자기 주소의 파일만 불러오고, 외부 서버로는 아무것도 보내지 않음 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'">
+<meta name="theme-color" content="#2a5d8c">
+<title>업무 일정</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="row r1">
+      <div class="brand"><b>업무 일정</b><span class="tag" id="yr"></span></div>
+      <div class="tools"><button id="b-save">저장</button><button id="b-set">설정</button></div>
+    </div>
+    <div class="fline" id="fline"></div>
+    <div class="row">
+      <button id="b-proj">프로젝트</button>
+      <div class="tools">
+        <button id="b-week">주차 보기</button>
+        <button class="chip" data-f="currentOnly" aria-pressed="true">현재 할일만 보기</button>
+        <button class="chip" data-f="showPast" aria-pressed="false">이전 보기</button>
+        <button class="chip" data-f="showDone" aria-pressed="false">완료 보기</button>
+      </div>
+    </div>
+    <div class="summary" id="summary"></div>
+  </header>
+  <div id="update" class="banner upd" role="status" hidden></div>
+  <div id="banners"></div>
+  <main id="main"></main>
+</div>
+<section id="start" class="start" hidden><div class="start-card" id="start-card"></div></section>
+<script src="xlsx.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
