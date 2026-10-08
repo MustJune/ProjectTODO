@@ -329,6 +329,43 @@ function fitNameCol(sc,port){
   if(need)setNW(sc,port,need,true);
 }
 
+/* ---------- 마우스를 올리면 내용 미리보기 (읽기 전용, PC 마우스에서만) ---------- */
+const TIP=h('div',{class:'tip',role:'tooltip',hidden:true});document.body.append(TIP);
+const tipHide=()=>{TIP.hidden=true};
+function tipMove(e){
+  const pad=14,r=TIP.getBoundingClientRect();
+  let x=e.clientX+pad,y=e.clientY+pad;
+  if(x+r.width>innerWidth-8)x=e.clientX-r.width-pad;
+  if(y+r.height>innerHeight-8)y=e.clientY-r.height-pad;
+  TIP.style.left=Math.max(8,x)+'px';TIP.style.top=Math.max(8,y)+'px';
+}
+function tipOn(el,id,build){
+  el.addEventListener('pointerenter',e=>{
+    if(e.pointerType!=='mouse'||OPEN===id||$('.ov'))return;   // 터치·편집 중·팝업 중에는 표시 안 함
+    TIP.textContent='';TIP.append(...build());TIP.hidden=false;tipMove(e)});
+  el.addEventListener('pointermove',e=>{if(!TIP.hidden&&e.pointerType==='mouse')tipMove(e)});
+  el.addEventListener('pointerleave',tipHide);
+  el.addEventListener('pointerdown',tipHide);
+  return el;
+}
+const tipNote=t=>t&&t.trim()?h('div',{class:'tip-note',text:t}):h('div',{class:'tip-none',text:'비고 없음'});
+const tipRow=(k,v)=>h('div',{class:'tip-row'},h('span',{class:'tip-k',text:k}),h('span',{text:v}));
+function projTip(p,all){
+  const c={run:0,late:0,wait:0,plan:0,done:0};all.forEach(i=>c[status(i).k]++);
+  return[h('div',{class:'tip-h',text:p.name}),
+    tipRow('할일',`${all.length}건 · 진행 ${c.run} · 지연 ${c.late} · 착수지연 ${c.wait} · 예정 ${c.plan} · 완료 ${c.done}`),
+    tipNote(p.note)];
+}
+function itemTip(it,p,st){
+  const dt=delayText(st);
+  return[h('div',{class:'tip-h'},h('span',{class:'st k-'+st.k,text:st.label}),' ',it.name),
+    tipRow('프로젝트',p.name),
+    tipRow('목표',`${it.ts||'-'} ~ ${it.te||'-'}`),
+    tipRow('실제',it.as?`${it.as} ~ ${it.ae||'진행 중'}`:'미착수'),
+    dt?tipRow('목표 대비',dt):null,
+    tipNote(it.note)].filter(Boolean);
+}
+
 /* ---------- 간트 (가로: 연간 / 세로: 금주부터 3주) ---------- */
 const PORT_WEEKS=3;
 const LAND_W=43.2;   // 가로 보기 주차 칸 너비(px). 기존 36의 1.2배
@@ -368,9 +405,9 @@ function renderGantt(root,port){
     const all=itemsOf(p.id), vis=all.filter(i=>visible(i,win));
     const pt=track();
     if(vis.length){const s=seg(Math.min(...vis.map(startOf)),Math.max(...vis.map(endOf)));if(s)pt.append(h('div',{class:'bar-p',style:s}))}
-    inner.append(h('div',{class:'g-row proj'+(OPEN==='P:'+p.id?' open':'')},
+    inner.append(tipOn(h('div',{class:'g-row proj'+(OPEN==='P:'+p.id?' open':'')},
       h('div',{class:'g-name',onclick:()=>openItem('P:'+p.id)},foldBtn(p),h('span',{class:'nm',text:p.name}),p.note?h('span',{class:'pn',title:'프로젝트 비고 있음',text:'비고'}):null,h('span',{class:'cnt',text:vis.length+(vis.length!==all.length?'/'+all.length:'')}),
-        h('button',{class:'add',text:'+','aria-label':p.name+'에 할일 추가',onclick:e=>{e.stopPropagation();addItem(p.id)}})),pt));
+        h('button',{class:'add',text:'+','aria-label':p.name+'에 할일 추가',onclick:e=>{e.stopPropagation();addItem(p.id)}})),pt),'P:'+p.id,()=>projTip(p,all)));
     if(OPEN==='P:'+p.id)inner.append(h('div',{class:'detail'},projEditor(p)));
     if(S.fold[p.id])continue;
     for(const it of vis){
@@ -379,8 +416,8 @@ function renderGantt(root,port){
       if(ts!=null&&te!=null){const s=seg(ts,te);if(s)t.append(h('div',{class:'bar-t'+cut(ts,te),style:s}))}
       if(as!=null){const e=ae??TODAY;if(e>=as){const s=seg(as,e);if(s)t.append(h('div',{class:'bar-a k-'+st.k+(ae==null?' ongoing':'')+cut(as,e),style:s}))}}
       const dt=delayText(st);
-      inner.append(h('div',{class:'g-row item'+(st.k==='done'?' done':'')+(OPEN===it.id?' open':''),onclick:()=>openItem(it.id)},
-        h('div',{class:'g-name k-'+st.k},h('span',{class:'dot'}),h('span',{class:'nm',text:it.name}),(dt&&st.k!=='done')?h('span',{class:'dl',text:dt}):null),t));
+      inner.append(tipOn(h('div',{class:'g-row item'+(st.k==='done'?' done':'')+(OPEN===it.id?' open':''),onclick:()=>openItem(it.id)},
+        h('div',{class:'g-name k-'+st.k},h('span',{class:'dot'}),h('span',{class:'nm',text:it.name}),(dt&&st.k!=='done')?h('span',{class:'dl',text:dt}):null),t),it.id,()=>itemTip(it,p,st)));
       if(OPEN===it.id)inner.append(h('div',{class:'detail'},editor(it)));
     }
   }
@@ -389,6 +426,7 @@ function renderGantt(root,port){
   return{sc,x,W};
 }
 function render(){
+  tipHide();
   renderHeader();
   const main=$('#main'),old=main.firstElementChild,oldMode=main.dataset.mode;
   const sl=old?old.scrollLeft:0,st=old?old.scrollTop:0;

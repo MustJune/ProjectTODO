@@ -146,6 +146,14 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 .cr{border-top-right-radius:0!important;border-bottom-right-radius:0!important}
 .bar-t.cl{border-left-style:dashed}.bar-t.cr{border-right-style:dashed}
 
+/* ---------- 미리보기 (마우스 올림) ---------- */
+.tip{position:fixed;z-index:70;max-width:min(420px,calc(100vw - 16px));background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.18);font-size:12.5px;display:grid;gap:5px;pointer-events:none}
+.tip-h{font-weight:700;font-size:13.5px;overflow-wrap:anywhere}
+.tip-row{display:flex;gap:8px}
+.tip-k{flex:none;width:56px;color:var(--muted)}
+.tip-note{white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid var(--line2);padding-top:6px;line-height:1.5;max-height:240px;overflow:hidden}
+.tip-none{color:var(--muted);border-top:1px solid var(--line2);padding-top:6px}
+
 /* ---------- Editor ---------- */
 .editor{background:var(--surface);border:1.5px solid var(--accent);border-radius:10px;padding:12px;display:grid;gap:10px;max-width:780px}
 .ed-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,180px);gap:8px}
