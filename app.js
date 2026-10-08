@@ -40,9 +40,9 @@ function toast(msg){const old=$('.toast');if(old)old.remove();const t=h('div',{c
 
 /* ---------- 상태 ---------- */
 const DEF_FILTERS={currentOnly:true,showPast:false,showDone:false};
-const S={projects:[],items:[],fold:{},filters:{...DEF_FILTERS},orient:'auto'};
-try{const p=JSON.parse(localStorage.getItem(PREF_KEY)||'null');if(p){S.fold=p.fold||{};S.filters={...DEF_FILTERS,...p.filters};S.orient=p.orient||'auto'}}catch(e){}
-function persist(){try{localStorage.setItem(PREF_KEY,JSON.stringify({fold:S.fold,filters:S.filters,orient:S.orient}))}catch(e){}}
+const S={projects:[],items:[],fold:{},filters:{...DEF_FILTERS},orient:'auto',nw:{land:200,port:136}};  // nw: 1열 너비(px)
+try{const p=JSON.parse(localStorage.getItem(PREF_KEY)||'null');if(p){S.fold=p.fold||{};S.filters={...DEF_FILTERS,...p.filters};S.orient=p.orient||'auto';if(p.nw)S.nw={...S.nw,...p.nw}}}catch(e){}
+function persist(){try{localStorage.setItem(PREF_KEY,JSON.stringify({fold:S.fold,filters:S.filters,orient:S.orient,nw:S.nw}))}catch(e){}}
 
 let DIR=null;        // 작업 폴더 핸들
 let LOADED=null;     // 현재 데이터의 기준 파일 {Y,n,ws,name,mtime}
@@ -306,11 +306,34 @@ function addItem(pid){
 function foldBtn(p){return h('span',{class:'fold',role:'button',tabindex:'0','aria-label':S.fold[p.id]?'펼치기':'접기',text:S.fold[p.id]?'▶':'▼',onclick:e=>{e.stopPropagation();toggleFold(p.id)}})}
 function toggleFold(pid){S.fold[pid]=!S.fold[pid];persist();render()}
 
+/* ---------- 1열(프로젝트·Action Item 이름) 너비 조절 ---------- */
+const nwMax=sc=>Math.max(160,Math.floor(sc.clientWidth*0.6));
+function setNW(sc,port,w,save){
+  w=Math.round(Math.min(nwMax(sc),Math.max(110,w)));
+  sc.style.setProperty('--NW',w+'px');
+  if(save){S.nw[port?'port':'land']=w;persist();if(port)render()}   // 세로 보기는 3주 칸 너비를 다시 계산
+  return w;
+}
+function startResize(e,sc,port){
+  e.preventDefault();e.stopPropagation();
+  const x0=e.clientX,w0=parseFloat(sc.style.getPropertyValue('--NW'))||S.nw[port?'port':'land'];
+  const hd=e.currentTarget;hd.classList.add('on');let w=w0;
+  const mv=ev=>{w=setNW(sc,port,w0+ev.clientX-x0,false)};
+  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);hd.classList.remove('on');setNW(sc,port,w,true)};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',up);
+}
+// 가장 긴 이름이 다 보이는 너비로 맞춤
+function fitNameCol(sc,port){
+  let need=0;
+  sc.querySelectorAll('.g-name').forEach(g=>{const nm=g.querySelector('.nm');if(nm)need=Math.max(need,g.clientWidth-nm.clientWidth+nm.scrollWidth+4)});
+  if(need)setNW(sc,port,need,true);
+}
+
 /* ---------- 간트 (가로: 연간 / 세로: 금주부터 3주) ---------- */
 const PORT_WEEKS=3;
 const LAND_W=43.2;   // 가로 보기 주차 칸 너비(px). 기존 36의 1.2배
 function renderGantt(root,port){
-  const NW=port?136:200;
+  const NW=Math.round(Math.min(Math.max(110,S.nw[port?'port':'land']),Math.max(160,root.clientWidth*0.6)));
   const vs=port?thisWS():viewStart();
   // 가로: 끝은 다음 해 3월 말까지. 시작은 [이전 보기] 켜면 올해 1월, 끄면 금주. 화면이 더 넓으면 오른쪽 끝까지 주차를 채움
   const landEnd=dn(`${YEAR+1}-03-31`);
@@ -335,7 +358,8 @@ function renderGantt(root,port){
   for(let i=0;i<nW;i++){const ws=vs+7*i;
     ht.append(h('div',{class:'g-wk'+(ws===tws?' now':''),style:{left:i*W+'px'}},h('b',{text:weekInfo(ws).tab}),port?`${md(ws)}~${md(ws+6)}`:md(ws)));
     if(port)for(let d=0;d<7;d++){const n=ws+d;ht.append(h('div',{class:'g-day'+(n===TODAY?' today':''),style:{left:x(n)+'px'},text:DN[dow(n)]}))}}
-  inner.append(h('div',{class:'g-head'},h('div',{class:'g-corner',text:port?'Action Item · 3주':'Action Item'}),ht));
+  inner.append(h('div',{class:'g-head'},h('div',{class:'g-corner'},port?'Action Item · 3주':'Action Item',
+    h('div',{class:'g-resize',title:'끌어서 1열 너비 조절 · 두 번 누르면 이름 길이에 맞춤',onpointerdown:e=>startResize(e,sc,port),ondblclick:e=>{e.stopPropagation();fitNameCol(sc,port)}})),ht));
   const track=()=>{const t=h('div',{class:'g-track',style:{width:tw+'px'}});
     if(tws>=vs)t.append(h('div',{class:'nowband',style:{left:x(tws)+'px'}}));
     if(TODAY>=vs&&TODAY<=ve)t.append(h('div',{class:'todayline',style:{left:(x(TODAY)+DW/2-1)+'px'}}));return t};

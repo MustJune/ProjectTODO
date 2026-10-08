@@ -131,6 +131,13 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 .g-day.today{color:var(--accent);font-weight:700}
 .port .g-track{background-image:linear-gradient(to right,var(--line) 1px,transparent 1px),linear-gradient(to right,var(--line2) 1px,transparent 1px);background-size:var(--W) 100%,var(--DW) 100%}
 .port .g-name{padding-left:8px}
+/* Action Item은 프로젝트보다 들여쓰기 */
+.g-row.item .g-name{padding-left:32px}
+.port .g-row.item .g-name{padding-left:24px}
+/* 1열 너비 조절 손잡이 */
+.g-resize{position:absolute;top:0;bottom:0;right:-7px;width:14px;cursor:col-resize;touch-action:none;z-index:8}
+.g-resize::after{content:'';position:absolute;top:20%;bottom:20%;left:6px;width:3px;border-radius:2px;background:var(--line)}
+.g-resize:hover::after,.g-resize.on::after{background:var(--accent)}
 .add{padding:0;width:28px;font-size:15px}
 .port .g-row.proj .cnt{display:none}
 @media (max-width:520px){header.top button{font-size:13px;padding:0 10px;min-height:32px}.chip{min-height:32px}}
