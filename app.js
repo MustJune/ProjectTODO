@@ -40,9 +40,9 @@ function toast(msg){const old=$('.toast');if(old)old.remove();const t=h('div',{c
 
 /* ---------- 상태 ---------- */
 const DEF_FILTERS={currentOnly:true,showPast:false,showDone:false};
-const S={projects:[],items:[],fold:{},filters:{...DEF_FILTERS},orient:'auto',nw:{land:200,port:136}};  // nw: 1열 너비(px)
-try{const p=JSON.parse(localStorage.getItem(PREF_KEY)||'null');if(p){S.fold=p.fold||{};S.filters={...DEF_FILTERS,...p.filters};S.orient=p.orient||'auto';if(p.nw)S.nw={...S.nw,...p.nw}}}catch(e){}
-function persist(){try{localStorage.setItem(PREF_KEY,JSON.stringify({fold:S.fold,filters:S.filters,orient:S.orient,nw:S.nw}))}catch(e){}}
+const S={projects:[],items:[],fold:{},filters:{...DEF_FILTERS},orient:'auto',nw:{land:200,port:136},zoom:43.2};  // zoom: 가로 보기 주차 칸 너비(px)  // nw: 1열 너비(px)
+try{const p=JSON.parse(localStorage.getItem(PREF_KEY)||'null');if(p){S.fold=p.fold||{};S.filters={...DEF_FILTERS,...p.filters};S.orient=p.orient||'auto';if(p.nw)S.nw={...S.nw,...p.nw};if(p.zoom)S.zoom=p.zoom}}catch(e){}
+function persist(){try{localStorage.setItem(PREF_KEY,JSON.stringify({fold:S.fold,filters:S.filters,orient:S.orient,nw:S.nw,zoom:S.zoom}))}catch(e){}}
 
 let DIR=null;        // 작업 폴더 핸들
 let LOADED=null;     // 현재 데이터의 기준 파일 {Y,n,ws,name,mtime}
@@ -81,7 +81,9 @@ function visible(it,win){
   if(win){const[a,b]=win;const e=st.k==='done'?endOf(it):Math.max(endOf(it),TODAY);if(startOf(it)>b||e<a)return false}
   return true;
 }
-const sortItems=arr=>arr.sort((a,b)=>(dn(a.ts)??9e9)-(dn(b.ts)??9e9)||a.name.localeCompare(b.name,'ko'));
+// 프로젝트 안 Action Item 정렬: 이름 오름차순(숫자는 크기순: 1-1) < 1-2) < 3) < 10)), 같으면 목표 시작일 순
+const NAME_CMP=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
+const sortItems=arr=>arr.sort((a,b)=>NAME_CMP.compare(a.name,b.name)||(dn(a.ts)??9e9)-(dn(b.ts)??9e9));
 const itemsOf=pid=>sortItems(S.items.filter(i=>i.pid===pid));
 
 /* ---------- 엑셀 ↔ 데이터 ---------- */
@@ -209,7 +211,9 @@ function renderHeader(){
   const sum=$('#summary');sum.textContent='';
   [['run','진행'],['late','지연'],['wait','착수지연'],['plan','예정'],['done','완료']].forEach(([k,l])=>
     sum.append(h('span',{class:'sum-i k-'+k},h('span',{class:'dot'}),l,' ',h('b',{text:c[k]}))));
-  sum.append(h('span',{class:'legend'},h('span',{class:'sum-i'},h('span',{class:'sw-t'}),'목표'),h('span',{class:'sum-i'},h('span',{class:'sw-a'}),'실제')));
+  sum.append(h('span',{class:'legend'},
+    mode()==='land'?h('span',{class:'zoom'},'주 간격',h('button',{type:'button','aria-label':'주 간격 좁게',text:'−',onclick:()=>zoomBy(-1)}),h('b',{text:Math.round(S.zoom/ZOOM_BASE*100)+'%'}),h('button',{type:'button','aria-label':'주 간격 넓게',text:'+',onclick:()=>zoomBy(1)})):null,
+    h('span',{class:'sum-i'},h('span',{class:'sw-t'}),'목표'),h('span',{class:'sum-i'},h('span',{class:'sw-a'}),'실제')));
   renderStatus();renderBanners();
 }
 
@@ -229,13 +233,40 @@ function editor(it){
     S.items=S.items.filter(x=>x.id!==it.id);OPEN=null;DRAFT=null;changed();render();toast('삭제했습니다')}});
   const ed=h('div',{class:'editor'},
     h('div',{class:'ed-top'},inp('Action Item','name','text'),h('label',{class:'fld'},h('span',{text:'프로젝트'}),sel)),
-    h('div',{class:'ed-dates'},inp('목표 시작','ts','date'),inp('목표 완료','te','date'),inp('실제 시작','as','date'),inp('실제 완료','ae','date')),
+    h('div',{class:'ed-sched'},rangeCal(D,upd),h('div',{class:'ed-act'},inp('실제 시작','as','date'),inp('실제 완료','ae','date'))),
     stBox,
     h('label',{class:'fld'},h('span',{text:'비고 (계획 · 결과)'}),ta),
     err,
     h('div',{class:'ed-foot'},delBtn,h('span',{class:'hint',text:'다른 곳을 누르면 저장 후 닫힙니다'}),h('button',{class:'primary',text:'확인',onclick:()=>{if(commit())render()}})));
   upd();ed._err=err;
   return ed;
+}
+// 목표 기간 달력: 첫 번째 누름 = 시작일, 두 번째 누름 = 완료일, 다시 누르면 시작일부터
+function rangeCal(D,onChange){
+  const box=h('div',{class:'cal'});
+  let phase=0;   // 0: 다음 누름이 시작일, 1: 다음 누름이 완료일
+  const base=new Date((dn(D.ts)??TODAY)*DAY);let y=base.getUTCFullYear(),m=base.getUTCMonth();
+  const nav=d=>{m+=d;if(m<0){m=11;y--}if(m>11){m=0;y++}draw()};
+  function draw(){
+    box.textContent='';
+    const a=dn(D.ts),b=dn(D.te),days=a!=null&&b!=null?b-a+1:0;
+    box.append(h('div',{class:'cal-sel'},h('span',{class:'cal-lbl',text:'목표 기간'}),h('b',{text:`${D.ts||'시작일'} ~ ${D.te||'완료일'}`}),days?h('span',{class:'cal-days',text:`${days}일`}):null),
+      h('div',{class:'cal-hint',text:phase?'완료일을 누르세요':'시작일을 누르세요 (이어서 누르는 날짜가 완료일)'}),
+      h('div',{class:'cal-nav'},h('button',{type:'button','aria-label':'이전 달',text:'◀',onclick:()=>nav(-1)}),h('b',{text:`${y}년 ${m+1}월`}),h('button',{type:'button','aria-label':'다음 달',text:'▶',onclick:()=>nav(1)})));
+    const grid=h('div',{class:'cal-grid'});
+    ['일','월','화','수','목','금','토'].forEach((t,i)=>grid.append(h('div',{class:'cal-dow'+(i===0?' sun':''),text:t})));
+    const first=Math.round(Date.UTC(y,m,1)/DAY),last=Math.round(Date.UTC(y,m+1,1)/DAY)-1;
+    for(let d=wsOf(first);d<=wsOf(last)+6;d++){
+      const inR=a!=null&&b!=null&&d>=a&&d<=b;
+      grid.append(h('button',{type:'button',class:'cal-d'+(d<first||d>last?' out':'')+(inR?' in':'')+(d===a?' s':'')+(d===b?' e':'')+(d===TODAY?' today':''),
+        text:new Date(d*DAY).getUTCDate(),'aria-label':iso(d),onclick:()=>{
+          if(phase===0){D.ts=iso(d);D.te=iso(d);phase=1}
+          else{const s=dn(D.ts);if(d<s){D.ts=iso(d);D.te=iso(s)}else D.te=iso(d);phase=0}
+          draw();onChange()}}));
+    }
+    box.append(grid);
+  }
+  draw();return box;
 }
 function validate(D){
   if(!D.name.trim())return'Action Item 이름을 입력하세요.';
@@ -368,15 +399,23 @@ function itemTip(it,p,st){
 
 /* ---------- 간트 (가로: 연간 / 세로: 금주부터 3주) ---------- */
 const PORT_WEEKS=3;
-const LAND_W=43.2;   // 가로 보기 주차 칸 너비(px). 기존 36의 1.2배
+// 가로 보기 주 간격(주차 칸 너비, px). 기본 43.2 = 100%
+const ZOOM_BASE=43.2, ZOOMS=[21.6,28.8,36,43.2,54,64.8,79.2,93.6];
+function zoomBy(dir){
+  const i=ZOOMS.reduce((bi,z,k)=>Math.abs(z-S.zoom)<Math.abs(ZOOMS[bi]-S.zoom)?k:bi,0);
+  const j=Math.min(ZOOMS.length-1,Math.max(0,i+dir));if(j===i)return;
+  const sc=$('.g-scroll'),day=sc?sc.scrollLeft/(S.zoom/7):0;   // 화면 왼쪽 끝 날짜를 유지
+  S.zoom=ZOOMS[j];persist();render();
+  const sc2=$('.g-scroll');if(sc2)sc2.scrollLeft=day*(S.zoom/7);
+}
 function renderGantt(root,port){
   const NW=Math.round(Math.min(Math.max(110,S.nw[port?'port':'land']),Math.max(160,root.clientWidth*0.6)));
   const vs=port?thisWS():viewStart();
   // 가로: 끝은 다음 해 3월 말까지. 시작은 [이전 보기] 켜면 올해 1월, 끄면 금주. 화면이 더 넓으면 오른쪽 끝까지 주차를 채움
   const landEnd=dn(`${YEAR+1}-03-31`);
-  const fillW=Math.ceil((root.clientWidth-NW)/LAND_W)+1;
+  const fillW=Math.ceil((root.clientWidth-NW)/S.zoom)+1;
   const nW=port?PORT_WEEKS:Math.max(Math.ceil((landEnd-vs+1)/7),fillW);
-  const W=port?Math.max(63,Math.floor((root.clientWidth-NW-1)/nW/7)*7):LAND_W, DW=W/7, tw=nW*W, ve=vs+nW*7-1;
+  const W=port?Math.max(63,Math.floor((root.clientWidth-NW-1)/nW/7)*7):S.zoom, DW=W/7, tw=nW*W, ve=vs+nW*7-1;
   const x=n=>(n-vs)*DW;
   const seg=(a,b)=>{const s=Math.max(a,vs),e=Math.min(b,ve);return e<s?null:{left:x(s)+'px',width:(e-s+1)*DW+'px'}};
   const win=port?[vs,ve]:null;
@@ -395,7 +434,10 @@ function renderGantt(root,port){
   for(let i=0;i<nW;i++){const ws=vs+7*i;
     ht.append(h('div',{class:'g-wk'+(ws===tws?' now':''),style:{left:i*W+'px'}},h('b',{text:weekInfo(ws).tab}),port?`${md(ws)}~${md(ws+6)}`:md(ws)));
     if(port)for(let d=0;d<7;d++){const n=ws+d;ht.append(h('div',{class:'g-day'+(n===TODAY?' today':''),style:{left:x(n)+'px'},text:DN[dow(n)]}))}}
-  inner.append(h('div',{class:'g-head'},h('div',{class:'g-corner'},port?'Action Item · 3주':'Action Item',
+  const anyOpen=S.projects.some(p=>!S.fold[p.id]);
+  inner.append(h('div',{class:'g-head'},h('div',{class:'g-corner'},h('span',{class:'g-lbl',text:port?'Action Item · 3주':'Action Item'}),
+    S.projects.length?h('button',{type:'button',class:'fold-all',title:anyOpen?'모든 프로젝트의 Action Item 접기':'모든 프로젝트의 Action Item 펼치기',text:anyOpen?'모두 접기':'모두 펼치기',
+      onclick:e=>{e.stopPropagation();S.projects.forEach(p=>{if(anyOpen)S.fold[p.id]=true;else delete S.fold[p.id]});persist();render()}}):null,
     h('div',{class:'g-resize',title:'끌어서 1열 너비 조절 · 두 번 누르면 이름 길이에 맞춤',onpointerdown:e=>startResize(e,sc,port),ondblclick:e=>{e.stopPropagation();fitNameCol(sc,port)}})),ht));
   const track=()=>{const t=h('div',{class:'g-track',style:{width:tw+'px'}});
     if(tws>=vs)t.append(h('div',{class:'nowband',style:{left:x(tws)+'px'}}));
